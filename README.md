@@ -4,4 +4,5 @@ required packages
 ```
 pip install pytube
 pip install bs4
-pip install pymovie
+pip install moviepy
+```
