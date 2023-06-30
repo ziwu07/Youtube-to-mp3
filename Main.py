@@ -103,7 +103,7 @@ def download_audio(input_url:str,filedir:str='./'):
 
                 global which
                 for which, video_url in enumerate(videos):
-                    download(video_url=video_url,playlist_dir=playlist_dir)
+                    download(video_url=video_url,playlist_dir=playlist_dir,singular=False)
                 
                 f.close()
                 print(f"Playlist downloaded: {playlist_title}")
