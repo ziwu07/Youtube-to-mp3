@@ -20,6 +20,7 @@ def sanitize_file_name(file_name:str):
     invalid_chars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|', "'", '.', ';']
     for char in invalid_chars:
         file_name = file_name.replace(char, ' ')
+    return file_name
 
 
 def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
@@ -27,14 +28,14 @@ def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
     try:
         yt.check_availability()
     except Exception as e:
-        print(f'unavailable {e}')
+        return f'unavailable {e}'
     else:
         try:
             video = yt.streams.get_audio_only(subtype='webm')
         except pytube.exceptions.AgeRestrictedError or pytube.exceptions.VideoPrivate as e:
-            print(f'Video is age restricted or private {e}')
+            print(f'Video is age restricted or private')
             while login != 'y' or login != 'n' or login is None:
-                login = input('Would you like to login inorder to download the video? (y/n) :')
+                login = input('Would you like to login in order to download the video? (y/n) :')
                 if login == 'y':
                     yt = YouTube(video_url, use_oauth=True, allow_oauth_cache=True)
                 elif login == 'n':
@@ -44,7 +45,7 @@ def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
             try:
                 video = yt.streams.get_audio_only(subtype='webm')
             except Exception as e:
-                print(e)
+                return e
         if singular is False:
             global max_length
             global which
@@ -55,7 +56,7 @@ def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
         try:
             video.download(output_path=playlist_dir, filename=video_file)
         except Exception as e:
-            print(f'!!!!!error: {e}')
+            return f'error: {e}'
         else:
             origin_file = os.path.join(playlist_dir, video_file)
             mp3_file = os.path.join(playlist_dir, video_file + ".mp3")
@@ -67,7 +68,7 @@ def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
                 global f
                 f.write(video_file + ".mp3" + "\n")
             global length
-            print(f"Audio downloaded ({current}/{length}) : {video_file}")
+            return f"Audio downloaded ({current}/{length}) : {video_file}"
 
 def download_audio(input_url:str,filedir:str='./'):
     os.chdir(filedir)
@@ -77,7 +78,7 @@ def download_audio(input_url:str,filedir:str='./'):
             playlist = Playlist(input_url)
             playlist_title = sanitize_file_name(file_name=get_title(page_url=input_url))
         except Exception as e:
-            print(f'error: invalid url {e}')
+            return f'error: invalid url {e}'
         else:
             videos = playlist.video_urls
 
@@ -87,7 +88,7 @@ def download_audio(input_url:str,filedir:str='./'):
                 global length
                 length = playlist.length
             except KeyError as e:
-                print(f'error: the playlist is most likely private {e}')
+                return f'error: the playlist is most likely private, make it unlisted and try again {e}'
             else:
                 global max_length
                 max_length = len(str(length))
@@ -98,10 +99,11 @@ def download_audio(input_url:str,filedir:str='./'):
 
                 global which
                 for which, video_url in enumerate(videos):
-                    download(video_url=video_url,playlist_dir=playlist_dir,singular=False)
+                    output = download(video_url=video_url,playlist_dir=playlist_dir,singular=False)
+                    print(output)
                 
                 f.close()
-                print(f"Playlist downloaded: {playlist_title}")
+                return f"Playlist downloaded: {playlist_title}"
 
     else:
         playlist_dir = 'Songs'
@@ -109,11 +111,12 @@ def download_audio(input_url:str,filedir:str='./'):
         try:
             yt = YouTube(input_url, use_oauth=False, allow_oauth_cache=True)
         except pytube.exceptions.RegexMatchError as e:
-            print(f'error: invalid url {e}')
+            return f'error: invalid url {e}'
         else:
-            download(video_url=input_url,playlist_dir=playlist_dir,singular=True)
+            return download(video_url=input_url,playlist_dir=playlist_dir,singular=True)
 
 
 if __name__ == '__main__':
     url = input("Enter the YouTube video or playlist URL: ")
-    download_audio(input_url=url,filedir='./songs')
+    output = download_audio(input_url=url,filedir='./songs')
+    print(output)
