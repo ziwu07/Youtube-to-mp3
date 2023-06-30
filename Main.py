@@ -20,11 +20,6 @@ def sanitize_file_name(file_name:str):
     invalid_chars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|', "'", '.', ';']
     for char in invalid_chars:
         file_name = file_name.replace(char, ' ')
-    try:
-        file_name.encode('utf-8').decode('utf-8')
-        return file_name
-    except UnicodeDecodeError:
-        return file_name.encode('latin1').decode('utf-8')
 
 
 def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
