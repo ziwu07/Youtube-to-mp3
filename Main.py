@@ -52,7 +52,8 @@ def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
                 print(e)
         if singular is False:
             global max_length
-            current = str(i + 1).zfill(max_length)
+            global which
+            current = str(which + 1).zfill(max_length)
         else:
             current = 1
         video_file = current + ' - ' + sanitize_file_name(file_name=get_title(page_url=video_url))
@@ -100,7 +101,8 @@ def download_audio(input_url:str,filedir:str='./'):
                 global f
                 f = open(playlist_file, "w", encoding='utf-8')
 
-                for i, video_url in enumerate(videos):
+                global which
+                for which, video_url in enumerate(videos):
                     download(video_url=video_url,playlist_dir=playlist_dir)
                 
                 f.close()
