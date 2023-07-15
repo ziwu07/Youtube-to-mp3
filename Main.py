@@ -5,6 +5,9 @@ import moviepy.editor as mp
 import os
 import requests
 from bs4 import BeautifulSoup
+import music_tag
+from urllib.parse import urlparse, urlunparse
+from datetime import datetime
 
 
 def get_title(page_url:str):
@@ -22,6 +25,31 @@ def sanitize_file_name(file_name:str):
         file_name = file_name.replace(char, ' ')
     return file_name
 
+def download_thumbnail(thumbnail_url:str,file_path:str='./thumbnail.jpg'):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+    
+    response = requests.get(thumbnail_url, headers=headers)
+    if response.status_code == 200:
+        with open(file_path, 'wb') as file:
+            file.write(response.content)
+    else:
+        print("Failed to download thumbnail.")
+
+def add_tag(file:str,youtube_object:YouTube,origin_file:str,song_title:str):
+    author = youtube_object.author
+    publish_date = youtube_object.publish_date
+    initial_thumbnail_url = youtube_object.thumbnail_url
+    bad_url = urlparse(initial_thumbnail_url)
+    bad_url = bad_url._replace(query=None)
+    thumbnail_url = urlunparse(bad_url)
+    image_file = origin_file + '.jpg'
+    download_thumbnail(thumbnail_url=thumbnail_url,file_path=image_file)
+    tag_editor = music_tag.load_file(file)
+    tag_editor['title'] = song_title
+    tag_editor['artist'] = author
+    tag_editor['year'] = publish_date.year
 
 def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
     yt = YouTube(video_url, use_oauth=False, allow_oauth_cache=True)
@@ -52,7 +80,8 @@ def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
             current = str(which + 1).zfill(max_length)
         else:
             current = 1
-        video_file = current + ' - ' + sanitize_file_name(file_name=get_title(page_url=video_url))
+        name = sanitize_file_name(file_name=get_title(page_url=video_url))
+        video_file = current + ' - ' + name
         try:
             video.download(output_path=playlist_dir, filename=video_file)
         except Exception as e:
@@ -64,6 +93,7 @@ def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
             clip.write_audiofile(mp3_file, codec='mp3', bitrate="320k", verbose=False, logger=None)
             clip.close()
             os.remove(origin_file)
+            add_tag(file=mp3_file , youtube_object=yt,origin_file=origin_file,song_title=name)
             if singular is False:
                 global f
                 f.write(video_file + ".mp3" + "\n")
