@@ -6,8 +6,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import music_tag
-from urllib.parse import urlparse, urlunparse
-from datetime import datetime
+from PIL import Image
 
 
 def get_title(page_url:str):
@@ -19,39 +18,72 @@ def get_title(page_url:str):
 
 
 def sanitize_file_name(file_name:str):
-    # Remove characters that are not allowed in file names
     invalid_chars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|', "'", '.', ';']
     for char in invalid_chars:
         file_name = file_name.replace(char, ' ')
     return file_name
 
-def download_thumbnail(thumbnail_url:str,file_path:str='./thumbnail.jpg'):
+class Error404(Exception):
+    pass
+
+def download_image(url:str, file_path:str):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
     }
     
-    response = requests.get(thumbnail_url, headers=headers)
+    response = requests.get(url, headers=headers)
     if response.status_code == 200:
         with open(file_path, 'wb') as file:
             file.write(response.content)
     else:
-        print("Failed to download thumbnail.")
+        raise Error404
+
+def make_thumbnail(image_path:str , result_path:str):
+    original_image = Image.open(image_path)
+    width, height = original_image.size
+    original_aspect_ratio = width / height
+    target_aspect_ratio_16_9 = 16 / 9
+    target_aspect_ratio_1_1 = 1.0
+    if original_aspect_ratio < target_aspect_ratio_16_9:
+        new_height = int(width / target_aspect_ratio_16_9)
+        y_offset = (height - new_height) // 2
+        original_image = original_image.crop((0, y_offset, width, y_offset + new_height))
+        width, height = original_image.size
+    if width / height > target_aspect_ratio_1_1:
+        new_width = int(height * target_aspect_ratio_1_1)
+        x_offset = (width - new_width) // 2
+        original_image = original_image.crop((x_offset, 0, x_offset + new_width, height))
+    original_image.save(result_path)
+
+def get_thumbnail(video_id:str,file_path:str):
+    image_url = 'https://i.ytimg.com/vi/' + video_id
+
+    try:
+        download_image(url=image_url + '/maxresdefault.jpg',file_path=file_path)
+    except Error404:
+        try:
+            download_image(url=image_url + '/sddefault.jpg',file_path=file_path)
+        except Error404:
+            try:
+                download_image(url=image_url + '/hqdefault.jpg',file_path=file_path)
+            except Error404:
+                raise Error404
+    make_thumbnail(image_path=file_path , result_path=file_path)
 
 def add_tag(file:str,youtube_object:YouTube,origin_file:str,song_title:str):
-    author = youtube_object.author
+    author = get_title(page_url=youtube_object.channel_url)
     publish_date = youtube_object.publish_date
-    initial_thumbnail_url = youtube_object.thumbnail_url
-    bad_url = urlparse(initial_thumbnail_url)
-    bad_url = bad_url._replace(query=None)
-    thumbnail_url = urlunparse(bad_url)
     image_file = origin_file + '.jpg'
-    download_thumbnail(thumbnail_url=thumbnail_url,file_path=image_file)
     tag_editor = music_tag.load_file(file)
     tag_editor['title'] = song_title
     tag_editor['artist'] = author
-    tag_editor['year'] = publish_date.year
+    get_thumbnail(video_id=youtube_object.video_id,file_path=image_file)
+    image = open(image_file,'rb').read()
+    tag_editor['artwork'] = image
+    tag_editor.save()
+    os.remove(image_file)
 
-def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
+def _download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
     yt = YouTube(video_url, use_oauth=False, allow_oauth_cache=True)
     try:
         yt.check_availability()
@@ -62,12 +94,14 @@ def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
             video = yt.streams.get_audio_only(subtype='webm')
         except pytube.exceptions.AgeRestrictedError or pytube.exceptions.VideoPrivate as e:
             print(f'Video is age restricted or private')
-            while login != 'y' or login != 'n' or login is None:
+            while True:
                 login = input('Would you like to login in order to download the video? (y/n) :')
                 if login == 'y':
                     yt = YouTube(video_url, use_oauth=True, allow_oauth_cache=True)
+                    break
                 elif login == 'n':
                     print('Skipping...')
+                    break
                 else:
                     print('Please enter "y" or "n"')
             try:
@@ -79,7 +113,7 @@ def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
             global which
             current = str(which + 1).zfill(max_length)
         else:
-            current = 1
+            current = '1'
         name = sanitize_file_name(file_name=get_title(page_url=video_url))
         video_file = current + ' - ' + name
         try:
@@ -98,12 +132,16 @@ def download(video_url:str,playlist_dir:str='Song',singular:bool='True'):
                 global f
                 f.write(video_file + ".mp3" + "\n")
             global length
+            if singular:
+                length = 1
             return f"Audio downloaded ({current}/{length}) : {video_file}"
 
 def download_audio(input_url:str,filedir:str='./'):
-    os.chdir(filedir)
+    try:
+        os.mkdir(filedir)
+    except FileExistsError:
+        pass
     if "playlist" in input_url:
-        # Download all videos in the playlist
         try:
             playlist = Playlist(input_url)
             playlist_title = sanitize_file_name(file_name=get_title(page_url=input_url))
@@ -129,7 +167,7 @@ def download_audio(input_url:str,filedir:str='./'):
 
                 global which
                 for which, video_url in enumerate(videos):
-                    output = download(video_url=video_url,playlist_dir=playlist_dir,singular=False)
+                    output = _download(video_url=video_url,playlist_dir=playlist_dir,singular=False)
                     print(output)
                 
                 f.close()
@@ -143,7 +181,7 @@ def download_audio(input_url:str,filedir:str='./'):
         except pytube.exceptions.RegexMatchError as e:
             return f'error: invalid url {e}'
         else:
-            return download(video_url=input_url,playlist_dir=playlist_dir,singular=True)
+            return _download(video_url=input_url,playlist_dir=playlist_dir,singular=True)
 
 
 if __name__ == '__main__':
